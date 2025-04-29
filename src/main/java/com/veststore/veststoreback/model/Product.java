@@ -1,5 +1,6 @@
 package com.veststore.veststoreback.model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.engine.jdbc.Size;
@@ -30,9 +31,12 @@ public class Product {
 
     @ManyToOne
     @JoinColumn(name = "category_id")
-    private Category category;
+    @JsonBackReference
 
-    private String imageUrl;
+    private Category category;
+    @Lob
+    @Basic(fetch = FetchType.EAGER) // Add this annotation
+    private byte[] imageUrl;
 
     @Column(name = "low_stock_threshold")
     private Integer lowStockThreshold = 5;

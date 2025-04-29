@@ -12,9 +12,11 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/categories")
+@CrossOrigin(origins = "http://localhost:4200")
 public class CategoryController {
 
     private final CategoryService categoryService;
@@ -24,11 +26,22 @@ public class CategoryController {
         this.categoryService = categoryService;
     }
 
-    @GetMapping
-    public ResponseEntity<List<Category>> getAllCategories() {
-        return ResponseEntity.ok(categoryService.getAllCategories());
-    }
+    @GetMapping("")
+    public ResponseEntity<List<CategoryDto>> getAllCategories() {
+        List<Category> categories = categoryService.getAllCategories();
 
+        // Convert to DTOs to avoid the circular reference with products
+        List<CategoryDto> categoryDtos = categories.stream()
+                .map(category -> {
+                    CategoryDto dto = new CategoryDto();
+                    dto.setId(category.getId());
+                    dto.setName(category.getName());
+                    return dto;
+                })
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(categoryDtos);
+    }
     @GetMapping("/{id}")
     public ResponseEntity<Category> getCategoryById(@PathVariable Long id) {
         return ResponseEntity.ok(categoryService.getCategoryById(id));

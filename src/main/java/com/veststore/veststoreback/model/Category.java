@@ -1,5 +1,7 @@
 package com.veststore.veststoreback.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.util.List;
@@ -14,6 +16,7 @@ public class Category {
 
     private String name;
 
-    @OneToMany(mappedBy = "category")
+    @OneToMany(mappedBy = "category", fetch = FetchType.LAZY)  // Add LAZY fetch
+    @JsonIgnore  // Use JsonIgnore instead of JsonManagedReference
     private List<Product> products;
 }

@@ -91,7 +91,7 @@ public class ProductService {
         product.setPrice(dto.getPrice());
         product.setStock(dto.getStock());
         product.setCategory(category);
-        product.setImageUrl(dto.getImageUrl());
+        product.setImageUrl(dto.getImageUrl().getBytes());
 
         if (dto.getLowStockThreshold() != null) {
             product.setLowStockThreshold(dto.getLowStockThreshold());

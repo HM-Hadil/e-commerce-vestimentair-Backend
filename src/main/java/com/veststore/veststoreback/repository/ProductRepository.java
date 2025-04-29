@@ -3,7 +3,6 @@ package com.veststore.veststoreback.repository;
 import com.veststore.veststoreback.model.Category;
 import com.veststore.veststoreback.model.Product;
 import com.veststore.veststoreback.model.ProductSize;
-import com.veststore.veststoreback.model.Size;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import java.math.BigDecimal;
@@ -12,7 +11,7 @@ import java.util.List;
 public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findByCategory(Category category);
 
-    List<Product> findBySize(Size size);
+    List<Product> findBySize(ProductSize size);
 
     List<Product> findByColor(String color);
 
