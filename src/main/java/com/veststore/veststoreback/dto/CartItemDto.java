@@ -41,5 +41,6 @@ public class CartItemDto {
     private BigDecimal price;
     @Enumerated(EnumType.STRING)
     private CartStatus status = CartStatus.EN_ATTENTE;
+    private int stock;
 
 }

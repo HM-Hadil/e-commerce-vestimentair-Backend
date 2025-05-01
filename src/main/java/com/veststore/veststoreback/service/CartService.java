@@ -8,6 +8,7 @@ import com.veststore.veststoreback.model.*;
 import com.veststore.veststoreback.repository.CartItemRepository;
 import com.veststore.veststoreback.repository.CartRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -69,6 +70,7 @@ public class CartService {
             newItem.setStatus(CartStatus.EN_ATTENTE);
             newItem.setColor(cartItemDto.getColor());
             cart.getItems().add(newItem);
+
             cartItemRepository.save(newItem);
         }
 
@@ -117,6 +119,8 @@ public class CartService {
             dto.setColor(item.getColor());
             dto.setStatus(item.getStatus());
             dto.setPrice(item.getProduct().getPrice());
+            dto.setStock(item.getProduct().getStock());
+
             return dto;
         }).collect(Collectors.toList());
     }
@@ -218,6 +222,9 @@ public class CartService {
                     dto.setColor(item.getColor());
                     dto.setStatus(item.getStatus());
                     dto.setPrice(item.getProduct().getPrice());
+                    dto.setStock(item.getProduct().getStock());
+                    dto.setStock(item.getProduct().getStock());
+
                     return dto;
                 })
                 .collect(Collectors.toList());
@@ -316,5 +323,63 @@ public class CartService {
         return productService.getAllProducts().stream()
                 .filter(Product::hasLowStock)
                 .collect(Collectors.toList());
+    }
+
+    // NEW METHOD: Allow users to update their own order status (limited to VALIDEE/ANNULEE)
+    @Transactional
+    public void updateOrderStatusByUser(Long userId, Long cartItemId, CartStatus newStatus) {
+        // Only VALIDEE and ANNULEE statuses are allowed for user updates
+        if (newStatus != CartStatus.VALIDEE && newStatus != CartStatus.ANNULEE) {
+            throw new IllegalArgumentException("Users can only set order status to VALIDEE or ANNULEE");
+        }
+
+        // Get the cart item
+        CartItem cartItem = cartItemRepository.findById(cartItemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found with id: " + cartItemId));
+
+        // Verify that the cart item belongs to the user
+        Cart cart = getCartByUserId(userId);
+        boolean itemBelongsToUser = cart.getItems().stream()
+                .anyMatch(item -> item.getId().equals(cartItemId));
+
+        if (!itemBelongsToUser) {
+            throw new AccessDeniedException("You don't have permission to update this order");
+        }
+
+        // Validation for VALIDEE status
+        if (newStatus == CartStatus.VALIDEE) {
+            if (cartItem.getStatus() != CartStatus.EN_ATTENTE) {
+                throw new IllegalStateException("Order must be in EN_ATTENTE status to be validated");
+            }
+
+            // Verify sufficient stock
+            Product product = cartItem.getProduct();
+            if (!product.hasEnoughStock(cartItem.getQuantity())) {
+                throw new InsufficientStockException("Not enough stock for product: " + product.getName());
+            }
+
+            // Update product stock
+            int newStock = product.getStock() - cartItem.getQuantity();
+            product.setStock(newStock);
+            productService.updateProduct(product);
+        }
+
+        // Validation for ANNULEE status
+        if (newStatus == CartStatus.ANNULEE) {
+            if (cartItem.getStatus() == CartStatus.EXPEDIEE || cartItem.getStatus() == CartStatus.LIVREE) {
+                throw new IllegalStateException("Cannot cancel an order that is already shipped or delivered");
+            }
+
+            // Return stock if cancelling a validated order
+            if (cartItem.getStatus() == CartStatus.VALIDEE) {
+                Product product = cartItem.getProduct();
+                product.setStock(product.getStock() + cartItem.getQuantity());
+                productService.updateProduct(product);
+            }
+        }
+
+        // Update the status
+        cartItem.setStatus(newStatus);
+        cartItemRepository.save(cartItem);
     }
 }

@@ -93,6 +93,22 @@ public class CartController {
         return ResponseEntity.ok().build();
     }
 
+    // NEW ENDPOINT: Allow users to update their own order status (limited to VALIDEE/ANNULEE)
+    @PutMapping("/items/{cartItemId}/status")
+    public ResponseEntity<Void> updateUserOrderStatus(
+            @PathVariable Long cartItemId,
+            @RequestParam Long userId,
+            @RequestParam CartStatus status) {
+        // Only allow users to set status to VALIDEE or ANNULEE
+        if (status != CartStatus.VALIDEE && status != CartStatus.ANNULEE) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // Check if the order belongs to the user (this should be implemented in the service)
+        cartService.updateOrderStatusByUser(userId, cartItemId, status);
+        return ResponseEntity.ok().build();
+    }
+
     // Endpoints admin
 
     @GetMapping("/admin/orders")
