@@ -1,7 +1,10 @@
 package com.veststore.veststoreback.dto;
 
 
+import com.veststore.veststoreback.model.CartStatus;
 import com.veststore.veststoreback.model.ProductSize;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -36,4 +39,7 @@ public class CartItemDto {
     private String color;
 
     private BigDecimal price;
+    @Enumerated(EnumType.STRING)
+    private CartStatus status = CartStatus.EN_ATTENTE;
+
 }

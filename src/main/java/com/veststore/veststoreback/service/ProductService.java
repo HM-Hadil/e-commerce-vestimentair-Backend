@@ -70,6 +70,23 @@ public class ProductService {
         return productRepository.save(product);
     }
 
+    /**
+     * Updates an existing product entity directly
+     * Used in CartService for stock management
+     *
+     * @param product The product entity with updated values
+     * @return The updated product entity
+     */
+    @Transactional
+    public Product updateProduct(Product product) {
+        // Validate that the product exists before saving
+        if (product.getId() != null) {
+            productRepository.findById(product.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + product.getId()));
+        }
+        return productRepository.save(product);
+    }
+
     @Transactional
     public void deleteProduct(Long id) {
         Product product = getProductById(id);

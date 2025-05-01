@@ -1,6 +1,7 @@
 package com.veststore.veststoreback.controller;
 
 
+import com.veststore.veststoreback.dto.SimplifiedUserDto;
 import com.veststore.veststoreback.dto.UserDto;
 import com.veststore.veststoreback.exception.ResourceNotFoundException;
 import com.veststore.veststoreback.model.User;
@@ -44,7 +45,11 @@ public class UserController {
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
     }
-
+    @GetMapping("/simplified")
+    public ResponseEntity<SimplifiedUserDto> getSimplifiedUserByEmail(@RequestParam String email) {
+        SimplifiedUserDto dto = userService.getSimplifiedUserByEmail(email);
+        return ResponseEntity.ok(dto);
+    }
     // Create new user
     @PostMapping
     public ResponseEntity<User> createUser(@RequestBody UserDto userDto) {

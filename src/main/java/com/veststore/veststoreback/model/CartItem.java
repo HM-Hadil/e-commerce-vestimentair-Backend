@@ -24,4 +24,6 @@ public class CartItem {
     private String size;
 
     private String color;
+    @Enumerated(EnumType.STRING)
+    private CartStatus status = CartStatus.EN_ATTENTE;
 }

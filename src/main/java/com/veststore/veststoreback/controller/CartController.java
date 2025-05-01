@@ -3,15 +3,20 @@ package com.veststore.veststoreback.controller;
 import com.veststore.veststoreback.dto.CartDto;
 import com.veststore.veststoreback.dto.CartItemDto;
 import com.veststore.veststoreback.model.Cart;
+import com.veststore.veststoreback.model.CartStatus;
+import com.veststore.veststoreback.model.Product;
 import com.veststore.veststoreback.security.UserDetailsImpl;
 import com.veststore.veststoreback.service.CartService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/cart")
@@ -24,57 +29,93 @@ public class CartController {
         this.cartService = cartService;
     }
 
-    @GetMapping
-    @PreAuthorize("hasRole('ROLE_USER')")
-    public ResponseEntity<CartDto> getCart(@AuthenticationPrincipal UserDetails userDetails) {
-        Long userId = extractUserId(userDetails);
+    @GetMapping("/{userId}")
+    public ResponseEntity<CartDto> getCart(@PathVariable Long userId) {
         Cart cart = cartService.getCartByUserId(userId);
         return ResponseEntity.ok(cartService.convertToDto(cart));
     }
 
     @PostMapping("/items")
-    @PreAuthorize("hasRole('ROLE_USER')")
     public ResponseEntity<CartDto> addItemToCart(
-            @AuthenticationPrincipal UserDetails userDetails,
-            @Valid @RequestBody CartItemDto cartItemDto) {
-        Long userId = extractUserId(userDetails);
+            @RequestParam Long userId,
+            @RequestBody CartItemDto cartItemDto) {
         Cart cart = cartService.addToCart(userId, cartItemDto);
         return ResponseEntity.ok(cartService.convertToDto(cart));
     }
 
     @PutMapping("/items/{itemId}")
-    @PreAuthorize("hasRole('ROLE_USER')")
     public ResponseEntity<CartDto> updateCartItem(
-            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long itemId,
-            @Valid @RequestBody CartItemDto cartItemDto) {
-        Long userId = extractUserId(userDetails);
-        Cart cart = cartService.updateCartItem(userId, itemId, cartItemDto.getQuantity());
+            @RequestParam Long userId,
+            @RequestBody Integer quantity) {
+        Cart cart = cartService.updateCartItem(userId, itemId, quantity);
         return ResponseEntity.ok(cartService.convertToDto(cart));
     }
 
-    @DeleteMapping("/items/{itemId}")
-    @PreAuthorize("hasRole('ROLE_USER')")
-    public ResponseEntity<Void> removeItemFromCart(
-            @AuthenticationPrincipal UserDetails userDetails,
-            @PathVariable Long itemId) {
-        Long userId = extractUserId(userDetails);
-        cartService.removeCartItem(userId, itemId);
-        return ResponseEntity.noContent().build();
+    @GetMapping
+    public List<CartItemDto> getAllCartItems() {
+        return cartService.getAllCartItems();
+    }
+
+    @DeleteMapping("/items/{cartItemId}")
+    public ResponseEntity<Void> removeCartItem(@PathVariable Long cartItemId, @RequestParam Long userId) {
+        cartService.removeCartItem(cartItemId, userId);
+        return ResponseEntity.ok().build();
     }
 
     @DeleteMapping
-    @PreAuthorize("hasRole('ROLE_USER')")
-    public ResponseEntity<Void> clearCart(@AuthenticationPrincipal UserDetails userDetails) {
-        Long userId = extractUserId(userDetails);
+    public ResponseEntity<Void> clearCart(@RequestParam Long userId) {
         cartService.clearCart(userId);
         return ResponseEntity.noContent().build();
     }
 
-    // Helper method to extract user ID from UserDetails
-    private Long extractUserId(UserDetails userDetails) {
-        // This implementation depends on your UserDetails implementation
-        // For example, if you have a custom UserDetails implementation with a getUserId method
-        return ((UserDetailsImpl) userDetails).getUserId();
+    // Nouvelles méthodes pour les fonctionnalités de commande
+
+    @PostMapping("/checkout")
+    public ResponseEntity<CartDto> placeOrder(@RequestParam Long userId) {
+        Cart cart = cartService.placeOrder(userId);
+        return ResponseEntity.ok(cartService.convertToDto(cart));
+    }
+
+    @GetMapping("/orders")
+    public ResponseEntity<List<CartItemDto>> getOrdersByStatus(
+            @RequestParam Long userId,
+            @RequestParam(required = false, defaultValue = "VALIDEE") CartStatus status) {
+        List<CartItemDto> orders = cartService.getOrdersByStatus(userId, status);
+        return ResponseEntity.ok(orders);
+    }
+
+    @PostMapping("/orders/{cartItemId}/cancel")
+    public ResponseEntity<Void> cancelOrder(
+            @RequestParam Long userId,
+            @PathVariable Long cartItemId) {
+        cartService.cancelOrder(userId, cartItemId);
+        return ResponseEntity.ok().build();
+    }
+
+    // Endpoints admin
+
+    @GetMapping("/admin/orders")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<List<CartItemDto>> getAllOrdersByStatus(
+            @RequestParam(required = false, defaultValue = "VALIDEE") CartStatus status) {
+        List<CartItemDto> orders = cartService.getAllOrdersByStatus(status);
+        return ResponseEntity.ok(orders);
+    }
+
+    @PutMapping("/admin/orders/{cartItemId}/status")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<Void> updateOrderStatus(
+            @PathVariable Long cartItemId,
+            @RequestParam CartStatus status) {
+        cartService.updateOrderStatus(cartItemId, status);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/admin/lowstock")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<List<Product>> getProductsWithLowStock() {
+        List<Product> products = cartService.getProductsWithLowStock();
+        return ResponseEntity.ok(products);
     }
 }

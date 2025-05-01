@@ -8,11 +8,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.veststore.veststoreback.repository.UserRepository;
 
 import java.io.IOException;
 
@@ -20,12 +21,12 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
-    private final UserDetailsService userDetailsService;
+    private final UserRepository userRepository;
 
     @Autowired
-    public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider, UserDetailsService userDetailsService) {
+    public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider, UserRepository userRepository) {
         this.jwtTokenProvider = jwtTokenProvider;
-        this.userDetailsService = userDetailsService;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -45,8 +46,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // Si le token existe et est valide, configurer l'authentification
             if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
-                String username = jwtTokenProvider.getUsernameFromJWT(token);
-                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                String userId = jwtTokenProvider.getUserIdFromJWT(token);
+
+                // Charger l'utilisateur à partir de son ID
+                Long userIdLong = Long.parseLong(userId);
+                UserDetails userDetails = userRepository.findById(userIdLong)
+                        .map(user -> UserDetailsImpl.build(user))
+                        .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
 
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());

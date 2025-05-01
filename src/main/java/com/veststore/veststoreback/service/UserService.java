@@ -1,5 +1,6 @@
 package com.veststore.veststoreback.service;
 
+import com.veststore.veststoreback.dto.SimplifiedUserDto;
 import com.veststore.veststoreback.dto.UserDto;
 import com.veststore.veststoreback.exception.ResourceNotFoundException;
 import com.veststore.veststoreback.model.Cart;
@@ -42,7 +43,19 @@ public class UserService {
     public Optional<User> getUserByEmail(String email) {
         return userRepository.findByEmail(email);
     }
+    public SimplifiedUserDto getSimplifiedUserByEmail(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
 
+        SimplifiedUserDto simplifiedUserDto = new SimplifiedUserDto();
+        simplifiedUserDto.setId(user.getId());
+        simplifiedUserDto.setName(user.getName());
+        simplifiedUserDto.setPassword(user.getPassword()); // Note: retourne le mot de passe hashé
+        simplifiedUserDto.setAddress(user.getAddress());
+        simplifiedUserDto.setPhone(user.getPhone());
+
+        return simplifiedUserDto;
+    }
     @Transactional
     public User createUser(UserDto userDto) {
         if (userRepository.existsByEmail(userDto.getEmail())) {

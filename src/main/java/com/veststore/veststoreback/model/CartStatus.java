@@ -1,6 +1,6 @@
 package com.veststore.veststoreback.model;
 
-public enum OrderStatus {
+public enum CartStatus {
     EN_ATTENTE, VALIDEE, EXPEDIEE, LIVREE, ANNULEE
 
 }

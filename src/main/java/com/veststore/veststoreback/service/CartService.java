@@ -5,15 +5,16 @@ import com.veststore.veststoreback.dto.CartItemDto;
 import com.veststore.veststoreback.exception.InsufficientStockException;
 import com.veststore.veststoreback.exception.ResourceNotFoundException;
 import com.veststore.veststoreback.model.*;
-;
 import com.veststore.veststoreback.repository.CartItemRepository;
 import com.veststore.veststoreback.repository.CartRepository;
-import com.veststore.veststoreback.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -65,6 +66,7 @@ public class CartService {
             newItem.setProduct(product);
             newItem.setQuantity(cartItemDto.getQuantity());
             newItem.setSize(String.valueOf(cartItemDto.getSize()));
+            newItem.setStatus(CartStatus.EN_ATTENTE);
             newItem.setColor(cartItemDto.getColor());
             cart.getItems().add(newItem);
             cartItemRepository.save(newItem);
@@ -102,8 +104,25 @@ public class CartService {
         return cartRepository.save(cart);
     }
 
+    public List<CartItemDto> getAllCartItems() {
+        List<CartItem> items = cartItemRepository.findAll();
+
+        return items.stream().map(item -> {
+            CartItemDto dto = new CartItemDto();
+            dto.setId(item.getId());
+            dto.setProductId(item.getProduct().getId());
+            dto.setProductName(item.getProduct().getName());
+            dto.setQuantity(item.getQuantity());
+            dto.setSize(item.getProduct().getSize());
+            dto.setColor(item.getColor());
+            dto.setStatus(item.getStatus());
+            dto.setPrice(item.getProduct().getPrice());
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
     @Transactional
-    public void removeCartItem(Long userId, Long cartItemId) {
+    public void removeCartItem(Long cartItemId, Long userId) {
         Cart cart = getCartByUserId(userId);
 
         CartItem cartItem = cart.getItems().stream()
@@ -141,10 +160,161 @@ public class CartService {
                     itemDto.setSize(ProductSize.valueOf(item.getSize()));
                     itemDto.setColor(item.getColor());
                     itemDto.setPrice(item.getProduct().getPrice());
+                    itemDto.setStatus(item.getStatus()); // Ajout du statut
                     return itemDto;
                 })
                 .toList());
 
         return cartDto;
+    }
+
+    // ---- Nouvelles fonctionnalités pour gérer les statuts des commandes ----
+
+    /**
+     * Place une commande (passe tous les articles du panier au statut VALIDEE)
+     */
+    @Transactional
+    public Cart placeOrder(Long userId) {
+        Cart cart = getCartByUserId(userId);
+
+        // Vérifier le stock pour tous les articles du panier
+        for (CartItem item : cart.getItems()) {
+            Product product = item.getProduct();
+            if (!product.hasEnoughStock(item.getQuantity())) {
+                throw new InsufficientStockException("Not enough stock for product: " + product.getName());
+            }
+
+            // Mise à jour du stock
+            int newStock = product.getStock() - item.getQuantity();
+            product.setStock(newStock);
+            productService.updateProduct(product);
+        }
+
+        // Mettre à jour le statut des articles
+        for (CartItem item : cart.getItems()) {
+            item.setStatus(CartStatus.VALIDEE);
+            cartItemRepository.save(item);
+        }
+
+        return cartRepository.save(cart);
+    }
+
+    /**
+     * Obtient toutes les commandes d'un utilisateur filtrées par statut
+     */
+    @Transactional(readOnly = true)
+    public List<CartItemDto> getOrdersByStatus(Long userId, CartStatus status) {
+        Cart cart = getCartByUserId(userId);
+
+        return cart.getItems().stream()
+                .filter(item -> item.getStatus() == status)
+                .map(item -> {
+                    CartItemDto dto = new CartItemDto();
+                    dto.setId(item.getId());
+                    dto.setProductId(item.getProduct().getId());
+                    dto.setProductName(item.getProduct().getName());
+                    dto.setQuantity(item.getQuantity());
+                    dto.setSize(ProductSize.valueOf(item.getSize()));
+                    dto.setColor(item.getColor());
+                    dto.setStatus(item.getStatus());
+                    dto.setPrice(item.getProduct().getPrice());
+                    return dto;
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Annule une commande (possible seulement si EN_ATTENTE)
+     */
+    @Transactional
+    public void cancelOrder(Long userId, Long cartItemId) {
+        Cart cart = getCartByUserId(userId);
+
+        CartItem cartItem = cart.getItems().stream()
+                .filter(item -> item.getId().equals(cartItemId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found with id: " + cartItemId));
+
+        if (cartItem.getStatus() != CartStatus.EN_ATTENTE) {
+            throw new IllegalStateException("Cannot cancel order that is not in waiting status");
+        }
+
+        cartItem.setStatus(CartStatus.ANNULEE);
+        cartItemRepository.save(cartItem);
+    }
+
+    /**
+     * Changement de statut d'un article (pour les admins)
+     */
+    @Transactional
+    public void updateOrderStatus(Long cartItemId, CartStatus newStatus) {
+        CartItem cartItem = cartItemRepository.findById(cartItemId)
+                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found with id: " + cartItemId));
+
+        // Validation des transitions d'état
+        switch (newStatus) {
+            case VALIDEE:
+                if (cartItem.getStatus() != CartStatus.EN_ATTENTE) {
+                    throw new IllegalStateException("Order must be in EN_ATTENTE status to be validated");
+                }
+                break;
+            case EXPEDIEE:
+                if (cartItem.getStatus() != CartStatus.VALIDEE) {
+                    throw new IllegalStateException("Order must be in VALIDEE status to be shipped");
+                }
+                break;
+            case LIVREE:
+                if (cartItem.getStatus() != CartStatus.EXPEDIEE) {
+                    throw new IllegalStateException("Order must be in EXPEDIEE status to be delivered");
+                }
+                break;
+            case ANNULEE:
+                if (cartItem.getStatus() == CartStatus.EXPEDIEE || cartItem.getStatus() == CartStatus.LIVREE) {
+                    throw new IllegalStateException("Cannot cancel an order that is already shipped or delivered");
+                }
+                // Si annulation d'une commande déjà validée, remettre le stock
+                if (cartItem.getStatus() == CartStatus.VALIDEE) {
+                    Product product = cartItem.getProduct();
+                    product.setStock(product.getStock() + cartItem.getQuantity());
+                    productService.updateProduct(product);
+                }
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid status: " + newStatus);
+        }
+
+        cartItem.setStatus(newStatus);
+        cartItemRepository.save(cartItem);
+    }
+
+    /**
+     * Obtenir toutes les commandes par statut (pour les admins)
+     */
+    @Transactional(readOnly = true)
+    public List<CartItemDto> getAllOrdersByStatus(CartStatus status) {
+        List<CartItem> items = cartItemRepository.findByStatus(status);
+
+        return items.stream().map(item -> {
+            CartItemDto dto = new CartItemDto();
+            dto.setId(item.getId());
+            dto.setProductId(item.getProduct().getId());
+            dto.setProductName(item.getProduct().getName());
+            dto.setQuantity(item.getQuantity());
+            dto.setSize(ProductSize.valueOf(item.getSize()));
+            dto.setColor(item.getColor());
+            dto.setStatus(item.getStatus());
+            dto.setPrice(item.getProduct().getPrice());
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * Vérifier les produits à stock faible
+     */
+    @Transactional(readOnly = true)
+    public List<Product> getProductsWithLowStock() {
+        return productService.getAllProducts().stream()
+                .filter(Product::hasLowStock)
+                .collect(Collectors.toList());
     }
 }

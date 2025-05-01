@@ -26,8 +26,7 @@ public class User {
 
     private String phone;
 
-    @OneToMany(mappedBy = "user")
-    private List<Order> orders = new ArrayList<>();
+
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
     private Cart cart;
